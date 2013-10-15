@@ -3,10 +3,14 @@ package org.dynjs.runtime.modules;
 import java.io.InputStream;
 import java.util.List;
 
+import org.apache.commons.vfs2.FileNotFoundException;
 import org.apache.commons.vfs2.FileObject;
 import org.apache.commons.vfs2.FileSystemException;
 import org.apache.commons.vfs2.FileSystemManager;
 import org.apache.commons.vfs2.VFS;
+import org.apache.commons.vfs2.impl.DefaultFileSystemManager;
+import org.apache.commons.vfs2.impl.StandardFileSystemManager;
+import org.apache.commons.vfs2.provider.res.ResourceFileProvider;
 import org.dynjs.runtime.DynJS;
 import org.dynjs.runtime.ExecutionContext;
 import org.dynjs.runtime.builtins.Require;
@@ -14,11 +18,16 @@ import org.dynjs.runtime.builtins.Require;
 public class CommonsVfsModuleProvider extends ModuleProvider {
 
     protected FileSystemManager fsManager;
+    protected List<String> rootPaths;
+    public String startPath = "";
 
     protected boolean SANE = true;
 
     public CommonsVfsModuleProvider() throws FileSystemException {
-        this.fsManager= VFS.getManager();
+        //DefaultFileSystemManager sfsm = new StandardFileSystemManager();
+        //sfsm.init();
+        FileSystemManager vfsm = VFS.getManager();
+        this.fsManager = vfsm;
     }
 
 	public CommonsVfsModuleProvider(FileSystemManager fsManager) {
@@ -29,8 +38,17 @@ public class CommonsVfsModuleProvider extends ModuleProvider {
     public String generateModuleID(ExecutionContext context, String moduleName) {
         Object require = context.getGlobalObject().get("require");
         if (require instanceof Require) {
-            FileObject moduleFile = findFile(((Require)require).getLoadPaths(), moduleName);
-            try {
+            List<String> loadPaths = ((Require)require).getLoadPaths();
+            try{
+                FileObject moduleFile = findFile(loadPaths, moduleName);
+                if (moduleFile != null && moduleFile.exists()) {
+                    return moduleFile.getURL().toString();
+                }
+            } catch (FileSystemException e) {
+                System.err.println("Error while checking for a module " + moduleName + ": " + e.getMessage());
+            }
+            try{
+                FileObject moduleFile = findFile(loadPaths, moduleName+"/index.js");
                 if (moduleFile != null && moduleFile.exists()) {
                     return moduleFile.getURL().toString();
                 }
@@ -43,17 +61,11 @@ public class CommonsVfsModuleProvider extends ModuleProvider {
 
     @Override
     boolean load(DynJS runtime, ExecutionContext context, String moduleID) {
-        FileObject file;
-        try{
-            file = this.fsManager.resolveFile(moduleID);
-        } catch (FileSystemException ex) {
-            return false;
-        }
         try {
-            if(file == null || !file.exists())
-                return false;
+            FileObject file = fetchFile(moduleID);
+            String fileContent = readFile(file);
             runtime.evaluate("require.addLoadPath('" + file.getParent() + "')");
-            runtime.newRunner().withContext(context).withSource(readFile(file)).execute();
+            runtime.newRunner().withFileName(file.getURL().toString()).withContext(context).withSource(fileContent).execute();
             runtime.evaluate("require.removeLoadPath('" + file.getParent() + "')");
             return true;
         } catch (FileSystemException e) {
@@ -75,13 +87,22 @@ public class CommonsVfsModuleProvider extends ModuleProvider {
         for (String loadPath : loadPaths) {
             // require('foo');
             try {
-                file = this.fsManager.resolveFile(loadPath+"/"+fileName);
-                // foo.js is in the require path
-                if (file.exists()) break;
-            } catch (FileSystemException ex) {
+                String newName = this.startPath+loadPath+fileName;
+                file = fetchFile(newName);
+                if(file != null){
+                    break;
+                }
+            } catch (Exception ex) {
+                //System.out.println("Error getting file "+moduleName+": "+ex.getMessage());
             }
         }
         return file;
+    }
+
+    protected FileObject fetchFile(String fileName) throws FileSystemException{
+        FileObject file = this.fsManager.resolveFile(fileName);
+        if (file.exists()) return file;
+        throw new FileNotFoundException(fileName);
     }
 
     protected String readFile(FileObject file) throws FileSystemException {
@@ -90,4 +111,7 @@ public class CommonsVfsModuleProvider extends ModuleProvider {
         return s.hasNext() ? s.next() : "";
     }
 
+    protected String fetchAndReadFile(String fileName) throws FileSystemException {
+        return readFile(fetchFile(fileName));
+    }
 }

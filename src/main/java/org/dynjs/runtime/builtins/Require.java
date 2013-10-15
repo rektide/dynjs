@@ -51,8 +51,13 @@ public class Require extends AbstractNativeFunction {
         javaClassModuleProvider.addModule(new UtilModule());
 
         this.moduleProviders.add(javaClassModuleProvider);
-        this.moduleProviders.add(new ClasspathModuleProvider());
-        this.moduleProviders.add(new FilesystemModuleProvider());
+
+        try{
+            CommonsVfsModuleProvider cvmp = new CommonsVfsModuleProvider();
+            this.moduleProviders.add(cvmp);
+        } catch(Exception ex) {
+            throw new RuntimeException("Failed to load CommonVfsModuleProvider", ex);
+        }
 
         String customRequirePath = this.getCustomRequirePath();
         if (customRequirePath != null) {
@@ -60,7 +65,9 @@ public class Require extends AbstractNativeFunction {
             Collections.addAll(this.loadPaths, paths);
         }
 
-        this.loadPaths.add(System.getProperty("user.dir") + "/");
+        String cwd = System.getProperty("user.dir")+"/";
+        this.loadPaths.add("res:");
+        this.loadPaths.add("file://"+cwd);
 
         this.put("paths", loadPaths);
         this.put("addLoadPath", new AbstractNativeFunction(globalObject) {

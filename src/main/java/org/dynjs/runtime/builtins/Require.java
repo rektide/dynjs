@@ -65,9 +65,8 @@ public class Require extends AbstractNativeFunction {
             Collections.addAll(this.loadPaths, paths);
         }
 
-        String cwd = System.getProperty("user.dir")+"/";
-        this.loadPaths.add("res:");
-        this.loadPaths.add("file://"+cwd);
+        this.loadPaths.add(System.getProperty("user.dir")+"/");
+        this.loadPaths.add("");
 
         this.put("paths", loadPaths);
         this.put("addLoadPath", new AbstractNativeFunction(globalObject) {

@@ -1,6 +1,8 @@
 package org.dynjs.runtime.modules;
 
 import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import org.apache.commons.vfs2.FileNotFoundException;
@@ -8,9 +10,6 @@ import org.apache.commons.vfs2.FileObject;
 import org.apache.commons.vfs2.FileSystemException;
 import org.apache.commons.vfs2.FileSystemManager;
 import org.apache.commons.vfs2.VFS;
-import org.apache.commons.vfs2.impl.DefaultFileSystemManager;
-import org.apache.commons.vfs2.impl.StandardFileSystemManager;
-import org.apache.commons.vfs2.provider.res.ResourceFileProvider;
 import org.dynjs.runtime.DynJS;
 import org.dynjs.runtime.ExecutionContext;
 import org.dynjs.runtime.builtins.Require;
@@ -19,19 +18,23 @@ public class CommonsVfsModuleProvider extends ModuleProvider {
 
     protected FileSystemManager fsManager;
     protected List<String> rootPaths;
-    public String startPath = "";
+    protected List<String> startPaths;
 
     protected boolean SANE = true;
+
+    public List<String> DEFAULT_START_PATHS = Arrays.asList("res:", "file://");
 
     public CommonsVfsModuleProvider() throws FileSystemException {
         //DefaultFileSystemManager sfsm = new StandardFileSystemManager();
         //sfsm.init();
         FileSystemManager vfsm = VFS.getManager();
         this.fsManager = vfsm;
+        this.startPaths = new ArrayList<String>(DEFAULT_START_PATHS);
     }
 
-	public CommonsVfsModuleProvider(FileSystemManager fsManager) {
+    public CommonsVfsModuleProvider(FileSystemManager fsManager, List<String> startPaths) {
         this.fsManager = fsManager;
+        this.startPaths = startPaths;
     }
 
     @Override
@@ -86,14 +89,16 @@ public class CommonsVfsModuleProvider extends ModuleProvider {
         FileObject file = null;
         for (String loadPath : loadPaths) {
             // require('foo');
-            try {
-                String newName = this.startPath+loadPath+fileName;
-                file = fetchFile(newName);
-                if(file != null){
-                    break;
+            for (String startPath : this.startPaths) {
+                try {
+                    String newName = startPath+loadPath+fileName;
+                    file = fetchFile(newName);
+                    if(file != null){
+                        break;
+                    }
+                } catch (Exception ex) {
+                    //System.out.println("Error getting file "+moduleName+": "+ex.getMessage());
                 }
-            } catch (Exception ex) {
-                //System.out.println("Error getting file "+moduleName+": "+ex.getMessage());
             }
         }
         return file;
